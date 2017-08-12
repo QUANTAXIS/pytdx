@@ -27,71 +27,18 @@ from pytdx.parser.get_company_info_category import GetCompanyInfoCategory
 from pytdx.parser.get_company_info_content import GetCompanyInfoContent
 from pytdx.parser.get_xdxr_info import GetXdXrInfo
 from pytdx.parser.get_finance_info import GetFinanceInfo
-
+from pytdx.util import get_real_trade_date,trade_date_sse
 from pytdx.params import TDXParams
+from pytdx.heartbeat import HqHeartBeatThread
 
 from pytdx.parser.setup_commands import SetupCmd1, SetupCmd2, SetupCmd3
-import threading
+import threading,datetime
+import random
 
-CONNECT_TIMEOUT = 5.000
-RECV_HEADER_LEN = 0x10
-
-class TdxHq_API(object):
-
-    def __init__(self, multithread=False):
-        self.need_setup = True
-        if multithread:
-            self.lock = threading.Lock()
-        else:
-            self.lock = None
-
-    def connect(self, ip, port):
-        """
-
-        :param ip:  服务器ip 地址
-        :param port:  服务器端口
-        :return: 是否连接成功 True/False
-        """
-
-        self.client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.client.settimeout(CONNECT_TIMEOUT)
-        log.debug("connecting to server : %s on port :%d" % (ip, port))
-        try:
-            self.client.connect((ip, port))
-        except socket.timeout as e:
-            print(str(e))
-            log.debug("connection expired")
-            return False
-        log.debug("connected!")
-
-        if self.need_setup:
-            self.setup()
-
-        return self
-
-    def disconnect(self):
-        if self.client:
-            log.debug("disconnecting")
-            try:
-                self.client.shutdown(socket.SHUT_RDWR)
-                self.client.close()
-            except Exception as e:
-                log.debug(str(e))
-            log.debug("disconnected")
-
-    def close(self):
-        """
-        disconnect的别名，为了支持 with closing(obj): 语法
-        :return:
-        """
-        self.disconnect()
+from pytdx.base_socket_client import BaseSocketClient, update_last_ack_time
 
 
-    def __enter__(self):
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self.close()
+class TdxHq_API(BaseSocketClient):
 
     def setup(self):
         SetupCmd1(self.client).call_api()
@@ -100,78 +47,106 @@ class TdxHq_API(object):
 
     #### API List
 
+    @update_last_ack_time
     def get_security_bars(self, category, market, code, start, count):
         cmd = GetSecurityBarsCmd(self.client, lock=self.lock)
         cmd.setParams(category, market, code, start, count)
         return cmd.call_api()
 
+    @update_last_ack_time
     def get_index_bars(self, category, market, code, start, count):
         cmd = GetIndexBarsCmd(self.client, lock=self.lock)
         cmd.setParams(category, market, code, start, count)
         return cmd.call_api()
 
+    @update_last_ack_time
     def get_security_quotes(self, all_stock):
         cmd = GetSecurityQuotesCmd(self.client, lock=self.lock)
         cmd.setParams(all_stock)
         return cmd.call_api()
 
+    @update_last_ack_time
     def get_security_count(self, market):
         cmd = GetSecurityCountCmd(self.client, lock=self.lock)
         cmd.setParams(market)
         return cmd.call_api()
 
+    @update_last_ack_time
     def get_security_list(self, market, start):
         cmd = GetSecurityList(self.client, lock=self.lock)
         cmd.setParams(market, start)
         return cmd.call_api()
 
+    @update_last_ack_time
     def get_minute_time_data(self, market, code):
         cmd = GetMinuteTimeData(self.client, lock=self.lock)
         cmd.setParams(market, code)
         return cmd.call_api()
 
+    @update_last_ack_time
     def get_history_minute_time_data(self, market, code, date):
         cmd = GetHistoryMinuteTimeData(self.client, lock=self.lock)
         cmd.setParams(market, code, date)
         return cmd.call_api()
 
+    @update_last_ack_time
     def get_transaction_data(self, market, code, start, count):
         cmd = GetTransactionData(self.client, lock=self.lock)
         cmd.setParams(market, code, start, count)
         return cmd.call_api()
 
+    @update_last_ack_time
     def get_history_transaction_data(self, market, code, start, count, date):
         cmd = GetHistoryTransactionData(self.client, lock=self.lock)
         cmd.setParams(market, code, start, count, date)
         return cmd.call_api()
 
+    @update_last_ack_time
     def get_company_info_category(self, market, code):
         cmd = GetCompanyInfoCategory(self.client, lock=self.lock)
         cmd.setParams(market, code)
         return cmd.call_api()
 
+    @update_last_ack_time
     def get_company_info_content(self, market, code, filename, start, length):
         cmd = GetCompanyInfoContent(self.client, lock=self.lock)
         cmd.setParams(market, code, filename, start, length)
         return cmd.call_api()
 
+    @update_last_ack_time
     def get_xdxr_info(self, market, code):
         cmd = GetXdXrInfo(self.client, lock=self.lock)
         cmd.setParams(market, code)
         return cmd.call_api()
 
+    @update_last_ack_time
     def get_finance_info(self, market, code):
         cmd = GetFinanceInfo(self.client, lock=self.lock)
         cmd.setParams(market, code)
         return cmd.call_api()
 
-    def to_df(self, v):
-        if isinstance(v, list):
-            return pd.DataFrame(data=v)
-        elif isinstance(v, dict):
-            return pd.DataFrame(data=[v,])
+    def do_heartbeat(self):
+        self.get_security_count(random.randint(0, 1))
+
+
+    def get_k_data(self, code, start,end):
+        # 具体详情参见 https://github.com/rainx/pytdx/issues/5
+        if str(code)[0]=='6':
+            #0 - 深圳， 1 - 上海
+            market_code=1
         else:
-            return pd.DataFrame(data=[{'value': v}])
+            market_code=0
+        start_date=get_real_trade_date(start,1)
+        end_date=get_real_trade_date(end,-1)
+        index_0=str(datetime.date.today())
+        index_of_index_0=trade_date_sse.index(index_0)
+        index_of_index_end=trade_date_sse.index(end_date)
+        index_of_index_start=trade_date_sse.index(start_date)
+        
+        index_of_end=index_of_index_0-index_of_index_end
+        index_length=index_of_index_end+1-index_of_index_start
+        return self.get_security_bars(9, market_code, code,index_of_end, index_length)  # 返回普通list
+        
 
 if __name__ == '__main__':
     import pprint
@@ -215,6 +190,9 @@ if __name__ == '__main__':
         pprint.pprint(data)
         log.info("读取财务信息")
         data = api.get_finance_info(0, '000001')
+        pprint.pprint(data)
+        log.info("日线级别k线获取函数")
+        data =api.get_k_data('000001','2017-07-01','2017-07-10')
         pprint.pprint(data)
 
         api.disconnect()

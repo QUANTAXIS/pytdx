@@ -4,25 +4,33 @@ from pytdx.log import DEBUG, log
 import zlib
 import struct
 import sys
+import datetime
 
+try:
+    import cython
+    if cython.compiled:
+        def buffer(x):
+            return x
+except ImportError:
+    pass
 
-class SocketClientNotReady(BaseException):
+class SocketClientNotReady(Exception):
     pass
 
 
-class SendPkgNotReady(BaseException):
+class SendPkgNotReady(Exception):
     pass
 
 
-class SendRequestPkgFails(BaseException):
+class SendRequestPkgFails(Exception):
     pass
 
 
-class ResponseHeaderRecvFails(BaseException):
+class ResponseHeaderRecvFails(Exception):
     pass
 
 
-class ResponseRecvFails(BaseException):
+class ResponseRecvFails(Exception):
     pass
 
 RSP_HEADER_LEN = 0x10
@@ -65,6 +73,7 @@ class BaseParser(object):
         else:
             result = self._call_api()
         return result
+
     def _call_api(self):
 
         self.setup()
@@ -77,6 +86,13 @@ class BaseParser(object):
 
         nsended = self.client.send(self.send_pkg)
 
+        self.client.send_pkg_num += 1
+        self.client.send_pkg_bytes += nsended
+        self.client.last_api_send_bytes = nsended
+
+        if self.client.first_pkg_send_time is None:
+            self.client.first_pkg_send_time = datetime.datetime.now()
+
         if DEBUG:
             log.debug("send package:" + str(self.send_pkg))
         if nsended != len(self.send_pkg):
@@ -87,16 +103,26 @@ class BaseParser(object):
             if DEBUG:
                 log.debug("recv head_buf:" + str(head_buf)  + " |len is :" + str(len(head_buf)))
             if len(head_buf) == self.rsp_header_len:
+                self.client.recv_pkg_num += 1
+                self.client.recv_pkg_bytes += self.rsp_header_len
                 _, _, _, zipsize, unzipsize = struct.unpack("<IIIHH", head_buf)
                 if DEBUG:
                     log.debug("zip size is: " + str(zipsize))
                 body_buf = bytearray()
 
+                last_api_recv_bytes = self.rsp_header_len
                 while True:
                     buf = self.client.recv(zipsize)
+                    len_buf = len(buf)
+                    self.client.recv_pkg_num += 1
+                    self.client.recv_pkg_bytes += len_buf
+                    last_api_recv_bytes += len_buf
                     body_buf.extend(buf)
-                    if not(buf) or len(buf) == 0 or len(body_buf) == zipsize:
+                    if not(buf) or len_buf == 0 or len(body_buf) == zipsize:
                         break
+
+                self.client.last_api_recv_bytes = last_api_recv_bytes
+
                 if len(buf) == 0:
                     log.debug("接收数据体失败服务器断开连接")
                     raise ResponseRecvFails("接收数据体失败服务器断开连接")

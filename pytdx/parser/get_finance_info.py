@@ -80,52 +80,56 @@ class GetFinanceInfo(BaseParser):
             weifenlirun,
             baoliu1,
             baoliu2
-        ) = struct.unpack("<IHHIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII", body_buf[pos:])
+        ) = struct.unpack("<fHHIIffffffffffffffffffffffffffffff", body_buf[pos:])
 
         def _get_v(v):
-            if v == 0:
-                return 0
-            else:
-                return get_volume(v)
+            return v
 
         return OrderedDict(
             [
                 ("market", market),
                 ("code", code.decode("utf-8")),
-                ("liutongguben", _get_v(liutongguben)),
+                ("liutongguben", _get_v(liutongguben)*10000),
                 ('province', province),
                 ('industry', industry),
                 ('updated_date', updated_date),
                 ('ipo_date', ipo_date),
-                ("zongguben", _get_v(zongguben)),
-                ("guojiagu", _get_v(guojiagu)),
-                ("faqirenfarengu", _get_v(faqirenfarengu)),
-                ("farengu", _get_v(farengu)),
-                ("bgu", _get_v(bgu)),
-                ("hgu", _get_v(hgu)),
-                ("zhigonggu", _get_v(zhigonggu)),
-                ("zongzichan", _get_v(zongzichan)),
-                ("liudongzichan", _get_v(liudongzichan)),
-                ("gudingzichan", _get_v(gudingzichan)),
-                ("wuxingzichan", _get_v(wuxingzichan)),
+                ("zongguben", _get_v(zongguben)*10000),
+                ("guojiagu", _get_v(guojiagu)*10000),
+                ("faqirenfarengu", _get_v(faqirenfarengu)*10000),
+                ("farengu", _get_v(farengu)*10000),
+                ("bgu", _get_v(bgu)*10000),
+                ("hgu", _get_v(hgu)*10000),
+                ("zhigonggu", _get_v(zhigonggu)*10000),
+                ("zongzichan", _get_v(zongzichan)*10000),
+                ("liudongzichan", _get_v(liudongzichan)*10000),
+                ("gudingzichan", _get_v(gudingzichan)*10000),
+                ("wuxingzichan", _get_v(wuxingzichan)*10000),
                 ("gudongrenshu", _get_v(gudongrenshu)),
-                ("liudongfuzhai", _get_v(liudongfuzhai)),
-                ("changqifuzhai", _get_v(changqifuzhai)),
-                ("zibengongjijin", _get_v(zibengongjijin)),
-                ("jingzichan", _get_v(jingzichan)),
-                ("zhuyingshouru", _get_v(zhuyingshouru)),
-                ("zhuyinglirun", _get_v(zhuyinglirun)),
-                ("yingshouzhangkuan", _get_v(yingshouzhangkuan)),
-                ("yingyelirun", _get_v(yingyelirun)),
-                ("touzishouyu", _get_v(touzishouyu)),
-                ("jingyingxianjinliu", _get_v(jingyingxianjinliu)),
-                ("zongxianjinliu", _get_v(zongxianjinliu)),
-                ("cunhuo", _get_v(cunhuo)),
-                ("lirunzonghe", _get_v(lirunzonghe)),
-                ("shuihoulirun", _get_v(shuihoulirun)),
-                ("jinglirun", _get_v(jinglirun)),
-                ("weifenlirun", _get_v(weifenlirun)),
-                ("baoliu1", _get_v(baoliu1)),
+                ("liudongfuzhai", _get_v(liudongfuzhai)*10000),
+                ("changqifuzhai", _get_v(changqifuzhai)*10000),
+                ("zibengongjijin", _get_v(zibengongjijin)*10000),
+                ("jingzichan", _get_v(jingzichan)*10000),
+                ("zhuyingshouru", _get_v(zhuyingshouru)*10000),
+                ("zhuyinglirun", _get_v(zhuyinglirun)*10000),
+                ("yingshouzhangkuan", _get_v(yingshouzhangkuan)*10000),
+                ("yingyelirun", _get_v(yingyelirun)*10000),
+                ("touzishouyu", _get_v(touzishouyu)*10000),
+                ("jingyingxianjinliu", _get_v(jingyingxianjinliu)*10000),
+                ("zongxianjinliu", _get_v(zongxianjinliu)*10000),
+                ("cunhuo", _get_v(cunhuo)*10000),
+                ("lirunzonghe", _get_v(lirunzonghe)*10000),
+                ("shuihoulirun", _get_v(shuihoulirun)*10000),
+                ("jinglirun", _get_v(jinglirun)*10000),
+                ("weifenpeilirun", _get_v(weifenlirun)*10000),
+                ("meigujingzichan", _get_v(baoliu1)),
                 ("baoliu2", _get_v(baoliu2))
             ]
         )
+
+if __name__ == '__main__':
+    import pprint
+    from pytdx.hq import TdxHq_API
+    api = TdxHq_API()
+    with api.connect():
+        pprint.pprint(api.get_finance_info(0, "000166"))

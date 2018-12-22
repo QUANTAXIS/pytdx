@@ -169,3 +169,6 @@ ENV/
 
 /test.py
 /debug
+/research
+
+*.c
